@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { useSimulation } from '../state/simulationStore';
 import { loadSavedScenarios } from '../state/persistence';
-import { idx } from '../simulation/grid';
+import { downloadSimulationCSV } from '../simulation/exportUtils';
 import {
   Printer,
   GitCompare,
@@ -32,38 +32,7 @@ export const ReportsPage: React.FC = () => {
 
   // Generate and Download CSV Export
   const handleExportCSV = () => {
-    const { params, C, t } = state;
-    const { nx, ny, dx, dy } = params.grid;
-
-    const lines: string[] = [
-      '# BreezeLab Simulation Numerical Data Export',
-      `# Export Timestamp,${new Date().toISOString()}`,
-      `# Simulation Time (s),${t.toFixed(2)}`,
-      `# Wind Speed (m/s),${params.wind.speed.toFixed(3)}`,
-      `# Wind Direction (deg),${params.wind.directionDeg.toFixed(1)}`,
-      `# Diffusion Coefficient D (m2/s),${params.diffusion}`,
-      `# Grid Dimensions,${nx}x${ny}`,
-      `# Cell Spacing dx dy (m),${dx},${dy}`,
-      `# Cell Area dA (m2),${(dx * dy).toFixed(2)}`,
-      `# Active Sources Count,${params.sources.length}`,
-      'col,row,x_coord_m,y_coord_m,concentration_ug_per_m2',
-    ];
-
-    for (let r = 0; r < ny; r++) {
-      for (let c = 0; c < nx; c++) {
-        const val = C[idx(c, r, nx)];
-        lines.push(`${c},${r},${(c * dx).toFixed(2)},${(r * dy).toFixed(2)},${val.toFixed(5)}`);
-      }
-    }
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `breezelab_export_t${t.toFixed(0)}s.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadSimulationCSV(state);
   };
 
   // Trigger browser print for formatted report

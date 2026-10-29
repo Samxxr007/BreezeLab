@@ -13,11 +13,13 @@
 
 import { createGrid, idx } from '../simulation/grid';
 import { stepSolver, checkStability } from '../simulation/solver';
-import type { SimulationParams } from '../simulation/simulationTypes';
+import type { SimulationParams, SimulationState } from '../simulation/simulationTypes';
 import { computeGradient } from './gradient';
 import { computeDivergence } from './divergence';
 import { computeCurl } from './curl';
 import { integrateConcentration } from './integration';
+import { generateSimulationCSV } from '../simulation/exportUtils';
+import { saveScenario, loadSavedScenarios, deleteScenario } from '../state/persistence';
 
 export interface TestResult {
   id: string;
@@ -310,99 +312,131 @@ export async function runAllTests(): Promise<TestResult[]> {
   }
 
   // -------------------------------------------------------------
-  // Test 7: Persistence Round-Trip Validation
+  // Test 7: Persistence Round-Trip via Actual Scenario Helpers
   // -------------------------------------------------------------
   try {
-    const testKey = 'breezelab_test_scenario';
-    const sampleScenario = {
-      id: 'test-123',
-      name: 'Validation Run Alpha',
-      createdAt: new Date().toISOString(),
-      params: {
-        grid: { nx: 25, ny: 25, dx: 1, dy: 1, width: 25, height: 25 },
-        wind: { ux: 2, uy: 1, speed: Math.hypot(2, 1), directionDeg: 60 },
-        diffusion: 1.0,
-        dt: 0.05,
-        sources: [{ id: 's1', x: 12, y: 12, rate: 10, label: 'Stack 1' }],
-        duration: 30,
-        animationSpeed: 2,
-      },
-      snapshot: [{ t: 0, totalMass: 0, avgConc: 0, maxConc: 0, selectedConc: 0 }],
-      peakConc: 15.4,
-      totalMass: 250.0,
+    const testScenarioName = `Verification_Run_${Date.now()}`;
+    const testParams: SimulationParams = {
+      grid: { nx: 25, ny: 25, dx: 2.0, dy: 2.0, width: 50, height: 50 },
+      wind: { ux: 2.5, uy: 1.2, speed: Math.hypot(2.5, 1.2), directionDeg: 64.3 },
+      diffusion: 0.8,
+      dt: 0.05,
+      sources: [
+        { id: 'src-test-1', x: 12, y: 12, rate: 45.0, label: 'Primary Test Stack' },
+        { id: 'src-test-2', x: 5, y: 5, rate: 20.0, label: 'Secondary Flare' },
+      ],
+      duration: 30,
+      animationSpeed: 2,
     };
+    const testHistory = [
+      { t: 0, totalMass: 0, avgConc: 0, maxConc: 0, selectedConc: 0 },
+      { t: 10, totalMass: 450, avgConc: 0.18, maxConc: 12.4, selectedConc: 8.2 },
+    ];
 
-    localStorage.setItem(testKey, JSON.stringify(sampleScenario));
-    const loadedRaw = localStorage.getItem(testKey);
-    localStorage.removeItem(testKey);
+    // 1. Save using the actual application persistence workflow
+    const saved = saveScenario(testScenarioName, testParams, testHistory, 12.4, 450);
 
-    const loaded = loadedRaw ? JSON.parse(loadedRaw) : null;
-    const passed = loaded && loaded.id === 'test-123' && loaded.params.sources[0].rate === 10;
+    // 2. Load from scenarios library
+    const loadedList = loadSavedScenarios();
+    const retrieved = loadedList.find((s) => s.id === saved.id);
+
+    // 3. Clean up
+    deleteScenario(saved.id);
+
+    // Verify all scenario fields were faithfully restored
+    const passed =
+      retrieved !== undefined &&
+      retrieved.name === testScenarioName &&
+      retrieved.params.wind.ux === 2.5 &&
+      retrieved.params.sources.length === 2 &&
+      retrieved.params.sources[0].rate === 45.0 &&
+      retrieved.totalMass === 450;
+
     results.push({
       id: 'T7',
-      name: 'LocalStorage Scenario Serialization Round-Trip',
-      passed: !!passed,
-      expected: 'Successfully serializes and restores complete scenario JSON',
-      actual: loaded ? `Restored scenario "${loaded.name}" with rate ${loaded.params.sources[0].rate}` : 'Failed to retrieve',
-      details: 'Ensures user scenarios persist with full fidelity across sessions.',
+      name: 'Scenario Persistence Workflow (saveScenario / loadSavedScenarios)',
+      passed: Boolean(passed),
+      expected: 'Exercises app persistence helpers to store, retrieve, and delete scenario',
+      actual: retrieved
+        ? `Successfully saved & retrieved "${retrieved.name}" with 2 sources (ux=${retrieved.params.wind.ux}m/s, rate=${retrieved.params.sources[0].rate}µg/s)`
+        : 'Failed to retrieve saved scenario',
+      details: 'Tests the actual saveScenario, loadSavedScenarios, and deleteScenario workflow methods.',
     });
   } catch (err: any) {
     results.push({
       id: 'T7',
-      name: 'LocalStorage Scenario Serialization Round-Trip',
+      name: 'Scenario Persistence Workflow',
       passed: false,
-      expected: 'Store and retrieve',
+      expected: 'Store and retrieve via scenario helpers',
       actual: 'Threw exception',
       error: err.message,
     });
   }
 
   // -------------------------------------------------------------
-  // Test 8: CSV Export Structure & Numerical Content
+  // Test 8: Live CSV Export Generation from SimulationState
   // -------------------------------------------------------------
   try {
-    const mockParams: SimulationParams = {
-      grid: { nx: 3, ny: 3, dx: 10, dy: 10, width: 30, height: 30 },
-      wind: { ux: 3.0, uy: 4.0, speed: 5.0, directionDeg: 36.87 },
-      diffusion: 0.5,
-      dt: 0.2,
-      sources: [{ id: 's1', x: 1, y: 1, rate: 50, label: 'Main' }],
-      duration: 10,
+    const testParams: SimulationParams = {
+      grid: { nx: 4, ny: 4, dx: 5.0, dy: 5.0, width: 20, height: 20 },
+      wind: { ux: 3.5, uy: 2.1, speed: Math.hypot(3.5, 2.1), directionDeg: 59.04 },
+      diffusion: 0.75,
+      dt: 0.1,
+      sources: [{ id: 's-live', x: 2, y: 2, rate: 80.0, label: 'Generator Stack' }],
+      duration: 20,
       animationSpeed: 1,
     };
-    const mockField = new Float64Array([0, 1.2, 0, 3.4, 15.8, 4.1, 0, 0.9, 0]);
 
-    const lines = [
-      '# BreezeLab Simulation Export',
-      `# Wind Speed (m/s),${mockParams.wind.speed}`,
-      `# Wind Direction (deg),${mockParams.wind.directionDeg}`,
-      `# Diffusion D (m2/s),${mockParams.diffusion}`,
-      'col,row,x_m,y_m,concentration_ug_per_m2',
-    ];
+    // Construct an actual field populated by stepping the solver
+    let field = createGrid(testParams.grid.nx, testParams.grid.ny);
+    field = stepSolver(field, testParams);
 
-    for (let r = 0; r < mockParams.grid.ny; r++) {
-      for (let c = 0; c < mockParams.grid.nx; c++) {
-        const val = mockField[idx(c, r, mockParams.grid.nx)];
-        lines.push(`${c},${r},${c * mockParams.grid.dx},${r * mockParams.grid.dy},${val.toFixed(4)}`);
-      }
-    }
+    const mockState: SimulationState = {
+      C: field,
+      t: 15.5,
+      step: 155,
+      params: testParams,
+      history: [],
+      isRunning: false,
+      isComplete: false,
+      selectedPoint: null,
+    };
 
-    const csvContent = lines.join('\n');
-    const passed = csvContent.includes('Wind Speed (m/s),5') && csvContent.includes('1,1,10,10,15.8000');
+    // Invoke the actual export utility used by ReportsPage
+    const csvOutput = generateSimulationCSV(mockState);
+
+    // Verify all physical parameters, dimensions, and matrix data are included
+    const hasHeaderTime = csvOutput.includes('Simulation Time (s),15.50');
+    const hasWindSpeed = csvOutput.includes(`Wind Speed (m/s),${testParams.wind.speed.toFixed(3)}`);
+    const hasDiffusion = csvOutput.includes(`Diffusion Coefficient D (m2/s),${testParams.diffusion}`);
+    const hasGridDim = csvOutput.includes('Grid Dimensions,4x4');
+    const hasCellArea = csvOutput.includes('Cell Area dA (m2),25.00');
+    const hasSourceConfig = csvOutput.includes('Generator Stack');
+    const hasMetricCoords = csvOutput.includes('2,2,10.00,10.00,');
+
+    const passed =
+      hasHeaderTime &&
+      hasWindSpeed &&
+      hasDiffusion &&
+      hasGridDim &&
+      hasCellArea &&
+      hasSourceConfig &&
+      hasMetricCoords;
+
     results.push({
       id: 'T8',
-      name: 'Export Content & Parameter Traceability',
+      name: 'Dynamic SimulationState CSV Export (generateSimulationCSV)',
       passed,
-      expected: 'Contains scenario headers, physical coordinate mapping, and concentration entries',
-      actual: `Verified valid CSV structure (${csvContent.split('\n').length} rows generated)`,
-      details: 'Ensures exported data faithfully documents simulation parameters and computed matrix.',
+      expected: 'Verifies shared export utility generates headers, parameters, coordinates, and computed values from live state',
+      actual: `Verified complete CSV (${csvOutput.split('\n').length} lines, headers: t=15.50s, speed=${testParams.wind.speed.toFixed(2)}m/s, dA=25m²)`,
+      details: 'Directly tests generateSimulationCSV() with real SimulationState from the solver.',
     });
   } catch (err: any) {
     results.push({
       id: 'T8',
-      name: 'Export Content & Parameter Traceability',
+      name: 'Dynamic SimulationState CSV Export',
       passed: false,
-      expected: 'Valid CSV output',
+      expected: 'Valid CSV from state',
       actual: 'Threw exception',
       error: err.message,
     });

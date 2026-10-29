@@ -1,0 +1,54 @@
+name: BreezeLab CI & Mathematical Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript Strict Type Check
+        run: npx tsc --noEmit
+
+      - name: Build Production Bundle (Vite)
+        run: npm run build
+
+      - name: Execute 8-Test Mathematical Validation Suite
+        run: |
+          npx tsc src/mathematics/numericalValidation.ts --outDir temp-ci --target es2022 --module commonjs --ignoreConfig
+          echo '{"type":"commonjs"}' > temp-ci/package.json
+          node -e '
+            const { runAllTests } = require("./temp-ci/mathematics/numericalValidation.js");
+            const storage = new Map();
+            globalThis.localStorage = {
+              getItem: (k) => storage.get(k) ?? null,
+              setItem: (k, v) => storage.set(k, String(v)),
+              removeItem: (k) => storage.delete(k),
+              clear: () => storage.clear(),
+            };
+            runAllTests().then(results => {
+              const failed = results.filter(r => !r.passed);
+              results.forEach(r => console.log(`[${r.passed ? "PASS" : "FAIL"}] ${r.id}: ${r.name}`));
+              if (failed.length > 0) {
+                console.error(`${failed.length} test(s) failed`);
+                process.exit(1);
+              }
+              console.log("All 8 mathematical validation tests passed successfully in CI.");
+            });
+          '
