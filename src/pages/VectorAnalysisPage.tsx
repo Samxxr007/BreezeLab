@@ -11,11 +11,11 @@ import { integrateConcentration } from '../mathematics/integration';
 import { Binary, Compass, RotateCcw, Sigma, Info, Crosshair } from 'lucide-react';
 
 export const VectorAnalysisPage: React.FC = () => {
-  const { state, setSelectedPoint } = useSimulation();
+  const { state } = useSimulation();
   const [activeTab, setActiveTab] = useState<'gradient' | 'divergence' | 'curl' | 'integration'>('gradient');
 
   const { nx, ny, dx, dy } = state.params.grid;
-  const { ux, uy, speed, directionDeg } = state.params.wind;
+  const { ux, uy, directionDeg } = state.params.wind;
 
   // Real Mathematical Computations
   const gradientField = computeGradient(state.C, nx, ny, dx, dy);
@@ -110,12 +110,12 @@ export const VectorAnalysisPage: React.FC = () => {
               </h2>
 
               <div className="p-3 bg-[#F5F7F4] border border-[#D8E0DA] rounded-md font-mono text-sm text-[#123B36] text-center">
-                ∇C(x, y) = ( ∂C/∂x , ∂C/∂y )
+                ∇C(x, y) = ( ∂C/∂x , ∂C/∂y )   [µg / m³]
               </div>
 
               <div className="text-xs text-[#52635D] leading-relaxed space-y-2">
                 <p>
-                  <strong>Physical Meaning:</strong> The gradient vector field points in the direction of greatest local increase in pollutant concentration. Its magnitude represents the steepness of the concentration plume front.
+                  <strong>Physical Meaning:</strong> The gradient vector field points in the direction of greatest local increase in pollutant concentration density. Its magnitude represents the steepness of the concentration plume front.
                 </p>
                 <p>
                   <strong>Numerical Discretization:</strong> Computed via 2nd-order central finite differences in the grid interior:
@@ -141,15 +141,15 @@ export const VectorAnalysisPage: React.FC = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div className="p-2 bg-[#F5F7F4] rounded border border-[#D8E0DA]">
                     <span className="text-[#687872] block text-[10px]">∂C/∂x</span>
-                    <span className="font-mono font-bold text-[#172521]">{ptGrad.gx.toFixed(4)}</span>
+                    <span className="font-mono font-bold text-[#172521]">{ptGrad.gx.toFixed(4)} µg/m³</span>
                   </div>
                   <div className="p-2 bg-[#F5F7F4] rounded border border-[#D8E0DA]">
                     <span className="text-[#687872] block text-[10px]">∂C/∂y</span>
-                    <span className="font-mono font-bold text-[#172521]">{ptGrad.gy.toFixed(4)}</span>
+                    <span className="font-mono font-bold text-[#172521]">{ptGrad.gy.toFixed(4)} µg/m³</span>
                   </div>
                   <div className="p-2 bg-[#F5F7F4] rounded border border-[#D8E0DA]">
                     <span className="text-[#687872] block text-[10px]">|∇C| Magnitude</span>
-                    <span className="font-mono font-bold text-[#16877A]">{ptGrad.magnitude.toFixed(4)}</span>
+                    <span className="font-mono font-bold text-[#16877A]">{ptGrad.magnitude.toFixed(4)} µg/m³</span>
                   </div>
                   <div className="p-2 bg-[#F5F7F4] rounded border border-[#D8E0DA]">
                     <span className="text-[#687872] block text-[10px]">Direction Angle</span>
@@ -168,7 +168,7 @@ export const VectorAnalysisPage: React.FC = () => {
               <div className="flex justify-between items-center py-2 border-b border-[#D8E0DA] text-xs">
                 <span className="text-[#52635D]">Peak Gradient Magnitude</span>
                 <span className="font-mono font-bold text-[#172521]">
-                  {Math.max(...Array.from(gradientField.magnitude.slice(0, 5000))).toFixed(4)} units/m
+                  {Math.max(...Array.from(gradientField.magnitude.slice(0, 5000))).toFixed(4)} µg/m³
                 </span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-[#D8E0DA] text-xs">
@@ -199,7 +199,7 @@ export const VectorAnalysisPage: React.FC = () => {
           <div className="lg:col-span-7 bg-[#FFFFFF] p-5 rounded-lg border border-[#D8E0DA] shadow-xs space-y-4">
             <h2 className="text-base font-bold text-[#172521]">Wind Field Divergence (∇ · u)</h2>
             <div className="p-3 bg-[#F5F7F4] border border-[#D8E0DA] rounded-md font-mono text-sm text-[#123B36] text-center">
-              div(u) = ∇ · u = ∂ux/∂x + ∂uy/∂y
+              div(u) = ∇ · u = ∂ux/∂x + ∂uy/∂y   [s⁻¹]
             </div>
 
             <div className="text-xs text-[#52635D] leading-relaxed space-y-2">
@@ -210,8 +210,8 @@ export const VectorAnalysisPage: React.FC = () => {
                 <strong>Incompressibility Requirement:</strong> For incompressible 2-D atmospheric flows, ∇ · u = 0. In our uniform prescribed velocity field (ux={ux.toFixed(2)}, uy={uy.toFixed(2)}):
               </p>
               <div className="p-2.5 bg-[#EDF1ED] rounded font-mono text-xs text-[#172521]">
-                ∂ux/∂x = 0.0000 <br />
-                ∂uy/∂y = 0.0000 <br />
+                ∂ux/∂x = 0.0000 s⁻¹ <br />
+                ∂uy/∂y = 0.0000 s⁻¹ <br />
                 div(u) = 0.0000 s⁻¹ everywhere
               </div>
             </div>
@@ -244,7 +244,7 @@ export const VectorAnalysisPage: React.FC = () => {
           <div className="lg:col-span-7 bg-[#FFFFFF] p-5 rounded-lg border border-[#D8E0DA] shadow-xs space-y-4">
             <h2 className="text-base font-bold text-[#172521]">Wind Field Curl (Vorticity ω_z)</h2>
             <div className="p-3 bg-[#F5F7F4] border border-[#D8E0DA] rounded-md font-mono text-sm text-[#123B36] text-center">
-              (∇ × u)_z = ∂uy/∂x − ∂ux/∂y
+              (∇ × u)_z = ∂uy/∂x − ∂ux/∂y   [s⁻¹]
             </div>
 
             <div className="text-xs text-[#52635D] leading-relaxed space-y-2">
@@ -287,7 +287,7 @@ export const VectorAnalysisPage: React.FC = () => {
           <div className="lg:col-span-7 bg-[#FFFFFF] p-5 rounded-lg border border-[#D8E0DA] shadow-xs space-y-4">
             <h2 className="text-base font-bold text-[#172521]">2-D Domain Quadrature ∬ C(x,y,t) dA</h2>
             <div className="p-3 bg-[#F5F7F4] border border-[#D8E0DA] rounded-md font-mono text-sm text-[#123B36] text-center">
-              M(t) = ∬_Ω C(x, y, t) dA ≈ ∑_(i,j) C(i, j) · Δx · Δy
+              M(t) = ∬_Ω C(x, y, t) dA ≈ ∑_(i,j) C(i, j) · Δx · Δy   [µg]
             </div>
 
             <div className="text-xs text-[#52635D] leading-relaxed space-y-2">
@@ -295,7 +295,7 @@ export const VectorAnalysisPage: React.FC = () => {
                 <strong>Mathematical Formulation:</strong> Discrete 2-D Riemann sum approximating the area-weighted concentration integral over the full domain Ω = [0, Lx] × [0, Ly].
               </p>
               <p>
-                <strong>Conservation Law:</strong> In closed systems with no-flux boundaries and zero sources, dM/dt = 0. With ongoing emissions, mass accumulates according to total injected source terms minus outflow crossing the domain boundaries.
+                <strong>Conservation Law:</strong> In closed systems with no-flux boundaries and zero sources, dM/dt = 0. With ongoing emissions, mass accumulates according to total injected source terms (∑ S_k · Δt) minus advective outflow crossing the domain boundaries.
               </p>
             </div>
           </div>
@@ -306,13 +306,13 @@ export const VectorAnalysisPage: React.FC = () => {
               <div className="flex justify-between items-center py-2 border-b border-[#D8E0DA] text-xs">
                 <span className="text-[#52635D]">Total Integrated Mass M(t)</span>
                 <span className="font-mono font-bold text-[#172521]">
-                  {integrationSummary.totalMass.toFixed(1)} model-units·m²
+                  {integrationSummary.totalMass.toFixed(1)} µg
                 </span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-[#D8E0DA] text-xs">
                 <span className="text-[#52635D]">Domain Average Concentration</span>
                 <span className="font-mono font-bold text-[#16877A]">
-                  {integrationSummary.averageConcentration.toFixed(3)} units/cell
+                  {integrationSummary.averageConcentration.toFixed(3)} µg/m²
                 </span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-[#D8E0DA] text-xs">

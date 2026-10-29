@@ -6,12 +6,9 @@ import { useSimulation } from '../state/simulationStore';
 import { loadSavedScenarios } from '../state/persistence';
 import { idx } from '../simulation/grid';
 import {
-  Download,
   Printer,
-  BarChart3,
   GitCompare,
   FileSpreadsheet,
-  CheckCircle2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -47,8 +44,9 @@ export const ReportsPage: React.FC = () => {
       `# Diffusion Coefficient D (m2/s),${params.diffusion}`,
       `# Grid Dimensions,${nx}x${ny}`,
       `# Cell Spacing dx dy (m),${dx},${dy}`,
+      `# Cell Area dA (m2),${(dx * dy).toFixed(2)}`,
       `# Active Sources Count,${params.sources.length}`,
-      'col,row,x_coord_m,y_coord_m,concentration_model_units',
+      'col,row,x_coord_m,y_coord_m,concentration_ug_per_m2',
     ];
 
     for (let r = 0; r < ny; r++) {
@@ -110,14 +108,14 @@ export const ReportsPage: React.FC = () => {
         <div className="bg-[#FFFFFF] p-5 rounded-lg border border-[#D8E0DA] shadow-xs space-y-3">
           <div>
             <h3 className="text-sm font-semibold text-[#172521]">Integrated Mass vs. Time M(t)</h3>
-            <p className="text-xs text-[#52635D]">Area integral ∬ C(x,y,t) dA reflecting net domain accumulation</p>
+            <p className="text-xs text-[#52635D]">Area integral ∬ C(x,y,t) dA [µg] reflecting net domain mass accumulation</p>
           </div>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={state.history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E3E9E4" />
                 <XAxis dataKey="t" tick={{ fontSize: 10 }} stroke="#52635D" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5, fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} stroke="#52635D" />
+                <YAxis tick={{ fontSize: 10 }} stroke="#52635D" unit=" µg" />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#123B36',
@@ -130,7 +128,7 @@ export const ReportsPage: React.FC = () => {
                 <Line
                   type="monotone"
                   dataKey="totalMass"
-                  name="Integrated Mass"
+                  name="Integrated Mass (µg)"
                   stroke="#E9A23B"
                   strokeWidth={2}
                   dot={false}
@@ -143,14 +141,14 @@ export const ReportsPage: React.FC = () => {
         <div className="bg-[#FFFFFF] p-5 rounded-lg border border-[#D8E0DA] shadow-xs space-y-3">
           <div>
             <h3 className="text-sm font-semibold text-[#172521]">Peak & Average Concentration vs. Time</h3>
-            <p className="text-xs text-[#52635D]">Maximum single-cell value and domain-wide spatial average</p>
+            <p className="text-xs text-[#52635D]">Maximum single-cell concentration and domain-wide spatial average [µg/m²]</p>
           </div>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={state.history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E3E9E4" />
                 <XAxis dataKey="t" tick={{ fontSize: 10 }} stroke="#52635D" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5, fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} stroke="#52635D" />
+                <YAxis tick={{ fontSize: 10 }} stroke="#52635D" unit=" µg/m²" />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#123B36',
@@ -164,7 +162,7 @@ export const ReportsPage: React.FC = () => {
                 <Line
                   type="monotone"
                   dataKey="maxConc"
-                  name="Peak Conc"
+                  name="Peak Conc (µg/m²)"
                   stroke="#D75A4A"
                   strokeWidth={2}
                   dot={false}
@@ -172,7 +170,7 @@ export const ReportsPage: React.FC = () => {
                 <Line
                   type="monotone"
                   dataKey="avgConc"
-                  name="Average Conc"
+                  name="Average Conc (µg/m²)"
                   stroke="#16877A"
                   strokeWidth={2}
                   dot={false}
@@ -258,7 +256,7 @@ export const ReportsPage: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-[#687872] block text-[11px]">Peak Recorded Conc</span>
-                  <span className="font-mono font-medium text-[#D75A4A]">{compareScenario.peakConc.toFixed(1)}</span>
+                  <span className="font-mono font-medium text-[#D75A4A]">{compareScenario.peakConc.toFixed(1)} µg/m²</span>
                 </div>
               </div>
             </div>

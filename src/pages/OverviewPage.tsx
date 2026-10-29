@@ -103,7 +103,7 @@ export const OverviewPage: React.FC = () => {
             <Maximize2 className="w-3.5 h-3.5 text-[#D75A4A]" />
           </div>
           <div className="text-2xl font-bold text-[#D75A4A] font-mono">{latestHistory.maxConc.toFixed(1)}</div>
-          <div className="text-[10px] text-[#52635D] mt-1">Model Units</div>
+          <div className="text-[10px] text-[#52635D] mt-1">µg / m²</div>
         </div>
 
         <div className="bg-[#FFFFFF] p-3.5 rounded-lg border border-[#D8E0DA] shadow-xs">
@@ -112,7 +112,7 @@ export const OverviewPage: React.FC = () => {
             <TrendingUp className="w-3.5 h-3.5 text-[#E9A23B]" />
           </div>
           <div className="text-2xl font-bold text-[#172521] font-mono">{latestHistory.totalMass.toFixed(0)}</div>
-          <div className="text-[10px] text-[#52635D] mt-1">∬ C(x,y) dA</div>
+          <div className="text-[10px] text-[#52635D] mt-1">µg (∬ C dA)</div>
         </div>
 
         <div className="bg-[#FFFFFF] p-3.5 rounded-lg border border-[#D8E0DA] shadow-xs">
@@ -132,7 +132,7 @@ export const OverviewPage: React.FC = () => {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-sm font-semibold text-[#172521]">Current Concentration Field</h3>
-              <p className="text-xs text-[#52635D]">Live spatial distribution computed by advection-diffusion solver</p>
+              <p className="text-xs text-[#52635D]">Spatial distribution computed by advection-diffusion solver (µg/m²)</p>
             </div>
             <Link
               to="/simulation"
@@ -153,7 +153,7 @@ export const OverviewPage: React.FC = () => {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-sm font-semibold text-[#172521]">Temporal Concentration Profile</h3>
-                <p className="text-xs text-[#52635D]">Integrated domain mass & peak concentration vs. time</p>
+                <p className="text-xs text-[#52635D]">Integrated domain mass (µg) & peak concentration (µg/m²) vs. time</p>
               </div>
               <Link
                 to="/reports"
@@ -182,7 +182,7 @@ export const OverviewPage: React.FC = () => {
                     <Line
                       type="monotone"
                       dataKey="maxConc"
-                      name="Peak Conc"
+                      name="Peak Conc (µg/m²)"
                       stroke="#D75A4A"
                       strokeWidth={2}
                       dot={false}
@@ -190,7 +190,7 @@ export const OverviewPage: React.FC = () => {
                     <Line
                       type="monotone"
                       dataKey="avgConc"
-                      name="Average Conc"
+                      name="Average Conc (µg/m²)"
                       stroke="#16877A"
                       strokeWidth={2}
                       dot={false}

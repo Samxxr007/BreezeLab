@@ -1,11 +1,12 @@
 // BreezeLab – Numerical Validation Engine
 //
 // Automated test suite covering the 8 mandatory validation tests:
-//   Test 1: Zero source + zero initial concentration => C remains 0.
+//   Test 1: Zero source + zero initial concentration => C remains identically 0.
 //   Test 2: Spatially constant velocity field => divergence ≈ 0 and curl ≈ 0.
 //   Test 3: Scalar field C(x,y) = 2x + 3y => numerical gradient ≈ (2, 3) in interior.
-//   Test 4: Diffusion-only scenario with no-flux boundaries => mass conservation.
-//   Test 5: Wind-only transport moves concentration centroid in wind direction.
+//   Test 4: Pure diffusion mass conservation => exact numerical conservation (|ΔM|/M < 1e-10)
+//           with no-flux boundaries, even when plume extends to the boundary.
+//   Test 5: Wind-only transport moves concentration centroid strictly downstream.
 //   Test 6: Time-step validation rejects or safely sub-steps unstable dt.
 //   Test 7: LocalStorage scenario persistence round-trip.
 //   Test 8: CSV export generation contains true simulation parameters & values.
@@ -58,8 +59,8 @@ export async function runAllTests(): Promise<TestResult[]> {
       id: 'T1',
       name: 'Zero Source & Initial State Conservation',
       passed,
-      expected: 'Max concentration = 0.000',
-      actual: `Max concentration = ${maxConcentration.toExponential(4)}`,
+      expected: 'Max concentration = 0.000 µg/m²',
+      actual: `Max concentration = ${maxConcentration.toExponential(4)} µg/m²`,
       details: 'With no sources or boundary inputs, C must remain identically zero.',
     });
   } catch (err: any) {
@@ -92,7 +93,7 @@ export async function runAllTests(): Promise<TestResult[]> {
       id: 'T2',
       name: 'Constant Velocity Field Incompressibility & Irrotationality',
       passed,
-      expected: 'div(u) = 0, curl(u) = 0',
+      expected: 'div(u) = 0 s⁻¹, curl(u) = 0 s⁻¹',
       actual: `div max|err| = ${divMaxAbs.toExponential(2)}, curl max|err| = ${curlMaxAbs.toExponential(2)}`,
       details: 'Uniform velocity field has analytically zero divergence and zero curl.',
     });
@@ -124,7 +125,6 @@ export async function runAllTests(): Promise<TestResult[]> {
 
     const grad = computeGradient(C, nx, ny, dx, dy);
 
-    // Sample interior cells away from boundary
     let maxGradErr = 0;
     for (let r = 2; r < ny - 2; r++) {
       for (let c = 2; c < nx - 2; c++) {
@@ -140,7 +140,7 @@ export async function runAllTests(): Promise<TestResult[]> {
       id: 'T3',
       name: 'Gradient Finite Difference Verification (C = 2x + 3y)',
       passed,
-      expected: '∇C = (2.000, 3.000) in interior',
+      expected: '∇C = (2.000, 3.000) µg/m³ in interior',
       actual: `Max error = ${maxGradErr.toExponential(4)}`,
       details: 'Central differences evaluate linear polynomial derivatives exactly.',
     });
@@ -156,57 +156,56 @@ export async function runAllTests(): Promise<TestResult[]> {
   }
 
   // -------------------------------------------------------------
-  // Test 4: Diffusion mass conservation with zero-gradient boundaries
+  // Test 4: Rigorous Diffusion Mass Conservation (No-Flux Neumann BC)
   // -------------------------------------------------------------
   try {
-    const nx = 31, ny = 31, dx = 1.0, dy = 1.0;
+    const nx = 25, ny = 25, dx = 2.0, dy = 2.0;
     const C = createGrid(nx, ny);
 
-    // Place an isolated gaussian/compact profile strictly in the center
-    const cx = Math.floor(nx / 2);
-    const cy = Math.floor(ny / 2);
-    for (let r = cy - 2; r <= cy + 2; r++) {
-      for (let c = cx - 2; c <= cx + 2; c++) {
-        C[idx(c, r, nx)] = 50.0;
+    // Initial distribution placed off-center, spreading across entire domain
+    for (let r = 5; r <= 15; r++) {
+      for (let c = 5; c <= 15; c++) {
+        C[idx(c, r, nx)] = 100.0 * Math.sin((c / nx) * Math.PI) * Math.sin((r / ny) * Math.PI);
       }
     }
 
-    const initialSum = integrateConcentration(C, nx, ny, dx, dy).discreteSum;
+    const initialTotalMass = integrateConcentration(C, nx, ny, dx, dy).totalMass;
 
     const params: SimulationParams = {
       grid: { nx, ny, dx, dy, width: nx * dx, height: ny * dy },
       wind: { ux: 0, uy: 0, speed: 0, directionDeg: 0 },
-      diffusion: 0.8,
+      diffusion: 1.5,
       dt: 0.1,
       sources: [],
-      duration: 10,
+      duration: 20,
       animationSpeed: 1,
     };
 
     let field = C;
-    for (let s = 0; s < 15; s++) {
+    // Step for 50 steps: pollutant interacts strongly with boundaries
+    for (let s = 0; s < 50; s++) {
       field = stepSolver(field, params);
     }
 
-    const finalSum = integrateConcentration(field, nx, ny, dx, dy).discreteSum;
-    const relDiff = Math.abs(finalSum - initialSum) / initialSum;
+    const finalTotalMass = integrateConcentration(field, nx, ny, dx, dy).totalMass;
+    const relDiff = Math.abs(finalTotalMass - initialTotalMass) / initialTotalMass;
 
-    // Interior diffusion with Neumann boundary should approximately conserve mass while peak spreads
-    const passed = relDiff < 0.05; // 5% tolerance across steps prior to significant boundary arrival
+    // With conservative no-flux boundaries, mass conservation holds to numerical floating-point precision
+    const passed = relDiff < 1e-10;
     results.push({
       id: 'T4',
-      name: 'Diffusion Mass Conservation Profile',
+      name: 'Rigorous Diffusion Mass Conservation (No-Flux BC)',
       passed,
-      expected: 'Mass variation < 5% before boundary outflow',
-      actual: `Relative change = ${(relDiff * 100).toFixed(3)}% (init=${initialSum.toFixed(1)}, final=${finalSum.toFixed(1)})`,
-      details: 'Discrete integration verifies that diffusion spreads concentration while preserving pollutant mass.',
+      expected: 'Mass variation |ΔM|/M < 1e-10 under pure diffusion',
+      actual: `Relative change = ${relDiff.toExponential(4)} (init=${initialTotalMass.toFixed(2)} µg, final=${finalTotalMass.toFixed(2)} µg)`,
+      details: 'Evaluates conservative discrete Laplacian with ∂C/∂n = 0 boundary conditions across 50 steps.',
     });
   } catch (err: any) {
     results.push({
       id: 'T4',
-      name: 'Diffusion Mass Conservation Profile',
+      name: 'Rigorous Diffusion Mass Conservation (No-Flux BC)',
       passed: false,
-      expected: 'Preserved mass',
+      expected: 'Exact mass conservation',
       actual: 'Threw exception',
       error: err.message,
     });
@@ -219,7 +218,6 @@ export async function runAllTests(): Promise<TestResult[]> {
     const nx = 40, ny = 40, dx = 1.0, dy = 1.0;
     const C = createGrid(nx, ny);
 
-    // Initial blob at (10, 10)
     const initX = 10, initY = 10;
     C[idx(initX, initY, nx)] = 100.0;
 
@@ -242,7 +240,6 @@ export async function runAllTests(): Promise<TestResult[]> {
       field = stepSolver(field, params);
     }
 
-    // Find peak location in final field
     let maxVal = -1;
     let peakCol = -1;
     let peakRow = -1;
@@ -257,7 +254,6 @@ export async function runAllTests(): Promise<TestResult[]> {
       }
     }
 
-    // Peak should have moved in the +x and +y direction
     const movedInWindDirection = peakCol > initX && peakRow >= initY;
     results.push({
       id: 'T5',
@@ -286,7 +282,7 @@ export async function runAllTests(): Promise<TestResult[]> {
       grid: { nx: 30, ny: 30, dx: 1.0, dy: 1.0, width: 30, height: 30 },
       wind: { ux: 10.0, uy: 10.0, speed: Math.hypot(10, 10), directionDeg: 45 },
       diffusion: 5.0,
-      dt: 1.0, // Clearly unstable since (|ux|/dx + |uy|/dy + 2D*(1/dx² + 1/dy²)) = 20 + 20 = 40 => max dt ≈ 0.025
+      dt: 1.0,
       sources: [],
       duration: 10,
       animationSpeed: 1,
@@ -376,13 +372,12 @@ export async function runAllTests(): Promise<TestResult[]> {
     };
     const mockField = new Float64Array([0, 1.2, 0, 3.4, 15.8, 4.1, 0, 0.9, 0]);
 
-    // Format CSV lines
     const lines = [
       '# BreezeLab Simulation Export',
       `# Wind Speed (m/s),${mockParams.wind.speed}`,
       `# Wind Direction (deg),${mockParams.wind.directionDeg}`,
       `# Diffusion D (m2/s),${mockParams.diffusion}`,
-      'col,row,x_m,y_m,concentration_model_units',
+      'col,row,x_m,y_m,concentration_ug_per_m2',
     ];
 
     for (let r = 0; r < mockParams.grid.ny; r++) {

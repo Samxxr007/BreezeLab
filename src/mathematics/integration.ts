@@ -1,24 +1,34 @@
 // BreezeLab – Numerical Integration (Quadrature)
 //
-// Computes total pollutant amount over the 2-D domain Ω:
-//   M(t) = ∬_Ω C(x,y,t) dA ≈ ∑∑ C(col, row) · dx · dy
-//
-// Discrete 2-D quadrature approximation over uniform rectangular grid.
-// Note on units:
-//   If C is in model-units per grid cell, discrete summation gives total model-units.
-//   Area-weighted integration scales by (dx * dy) for spatial concentration density.
+// PHYSICAL UNIT DEFINITIONS:
+// ─────────────────────────────────────────────────────────────────────────────
+// C(x, y, t)          : Areal concentration density [µg / m²]
+// dx, dy              : Grid cell spatial dimensions [m]
+// dA = dx · dy        : Grid cell area [m²]
+// M(t) = ∬_Ω C dA     : Total pollutant mass in domain [µg]
+//                     : Approximated via 2-D rectangle quadrature:
+//                     : M(t) = ∑_{i,j} C(i, j) · dx · dy
+// Average Conc C_avg  : Mean spatial concentration density [µg / m²]
+//                     : C_avg = M(t) / (Total Domain Area)
+//                     :       = (∑ C_ij) / (nx · ny)
 
 export interface IntegrationSummary {
-  totalMass: number;       // Area-weighted integral: ∑ C[i] * dx * dy
-  discreteSum: number;     // Direct sum of cell contents: ∑ C[i]
-  averageConcentration: number; // discreteSum / (nx * ny)
-  minConcentration: number;
-  maxConcentration: number;
-  domainArea: number;      // nx * dx * ny * dy
+  totalMass: number;            // Total integrated mass: ∬ C dA = ∑ C_ij · dx · dy [µg]
+  discreteSum: number;          // Raw array sum: ∑ C_ij
+  averageConcentration: number; // Mean concentration density: M(t) / Area [µg / m²]
+  minConcentration: number;     // Minimum single cell concentration [µg / m²]
+  maxConcentration: number;     // Maximum single cell concentration [µg / m²]
+  domainArea: number;           // Total domain surface area: nx · dx · ny · dy [m²]
 }
 
 /**
  * Computes numerical double integration and summary statistics of the concentration field.
+ *
+ * @param C   Concentration field (µg/m²)
+ * @param nx  Number of columns
+ * @param ny  Number of rows
+ * @param dx  Cell width (m)
+ * @param dy  Cell height (m)
  */
 export function integrateConcentration(
   C: Float64Array,
@@ -41,9 +51,10 @@ export function integrateConcentration(
 
   const cellArea = dx * dy;
   const domainArea = nx * ny * cellArea;
+  const totalMass = sum * cellArea;
 
   return {
-    totalMass: sum * cellArea,
+    totalMass,
     discreteSum: sum,
     averageConcentration: n > 0 ? sum / n : 0,
     minConcentration: isFinite(min) ? min : 0,

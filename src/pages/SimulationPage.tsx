@@ -13,9 +13,7 @@ import {
   StepForward,
   Save,
   Trash2,
-  AlertTriangle,
   Sliders,
-  Wind,
   PlusCircle,
   Layers,
   Info,
@@ -304,7 +302,7 @@ export const SimulationPage: React.FC = () => {
                       </div>
                     </div>
                     <div>
-                      <span className="text-[#52635D]">Rate (units/s):</span>
+                      <span className="text-[#52635D]">Rate (µg/s):</span>
                       <input
                         type="number"
                         min="1"

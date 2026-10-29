@@ -4,18 +4,13 @@
 //
 //   ∂C/∂t + ux·∂C/∂x + uy·∂C/∂y = D·(∂²C/∂x² + ∂²C/∂y²) + S(x,y,t)
 //
-// Discretisation:
-//   • Advection  : first-order upwind finite differences
-//   • Diffusion  : second-order central differences
-//   • Time       : explicit Euler (forward Euler)
-//
-// Stability – combined CFL + diffusion constraint:
-//
-//   ν = dt · (|ux|/dx + |uy|/dy + 2D·(1/dx² + 1/dy²))  ≤  1
-//
-//   This is a conservative sufficient condition for the combined upwind/central
-//   explicit scheme. Violating it leads to oscillations or blow-up.
-//   The solver auto-subdivides dt into safe sub-steps when needed.
+// Consistent Physical Units:
+//   C       : µg / m²        (concentration density)
+//   ux, uy  : m / s          (wind velocity components)
+//   D       : m² / s         (turbulent diffusion coefficient)
+//   S       : µg / (m² · s)  (source mass rate per unit area: rate/(dx·dy))
+//   dt      : s              (time step)
+//   dx, dy  : m              (cell spacing)
 
 import type { SimulationParams, StabilityCheck } from './simulationTypes';
 import { idx, cloneGrid, sanitiseGrid } from './grid';
@@ -40,12 +35,11 @@ export function checkStability(params: SimulationParams): StabilityCheck {
   const diffTerm = 2 * diffusion * (1 / (dx * dx) + 1 / (dy * dy));
   const rhs = advTerm + diffTerm;
 
-  // Avoid division by zero when wind and diffusion are both zero
   const maxSafeDt = rhs > 0 ? 1 / rhs : Infinity;
-  const recommendedDt = maxSafeDt * 0.45; // safety margin
+  const recommendedDt = maxSafeDt * 0.45;
 
   const combinedNumber = dt * rhs;
-  const stable = combinedNumber <= 1.0 + 1e-10; // small tolerance for floating-point
+  const stable = combinedNumber <= 1.0 + 1e-10;
 
   let message: string | undefined;
   if (!stable) {
@@ -59,12 +53,10 @@ export function checkStability(params: SimulationParams): StabilityCheck {
 
 /**
  * Compute the number of sub-steps needed to keep ν ≤ 1.
- * Returns at least 1.
  */
 function computeSubsteps(params: SimulationParams): number {
   const check = checkStability(params);
   if (check.stable) return 1;
-  // Subdivide so that dt_sub = dt / n gives ν_sub ≤ 0.9
   const n = Math.ceil(params.dt / (check.maxSafeDt * 0.9));
   return Math.max(1, n);
 }
@@ -72,15 +64,10 @@ function computeSubsteps(params: SimulationParams): number {
 // ─── Core Solver Step ───────────────────────────────────────────────────────
 
 /**
- * Advance the concentration field by one *effective* time step dt.
+ * Advance the concentration field by one time step dt.
  *
  * If the requested dt is unstable, the step is subdivided internally.
- * Sources are spread proportionally across sub-steps.
- *
- * Returns a NEW Float64Array (does not mutate the input).
- *
- * @param C       Current concentration field (row-major, length = nx * ny)
- * @param params  Simulation parameters
+ * Returns a NEW Float64Array (does not mutate input).
  */
 export function stepSolver(C: Float64Array, params: SimulationParams): Float64Array {
   validateParams(params);
@@ -88,7 +75,6 @@ export function stepSolver(C: Float64Array, params: SimulationParams): Float64Ar
   const nSub = computeSubsteps(params);
   const dtSub = params.dt / nSub;
 
-  // Use a modified params with the sub-step dt
   const subParams: SimulationParams = { ...params, dt: dtSub };
 
   let current = cloneGrid(C);
@@ -101,7 +87,8 @@ export function stepSolver(C: Float64Array, params: SimulationParams): Float64Ar
 }
 
 /**
- * One explicit Euler step with upwind advection and central diffusion.
+ * One explicit Euler step with upwind advection, central diffusion,
+ * and conservative zero-diffusive-flux boundaries.
  */
 function singleExplicitStep(C: Float64Array, params: SimulationParams): Float64Array {
   const { grid, wind, diffusion, dt, sources } = params;
@@ -109,36 +96,47 @@ function singleExplicitStep(C: Float64Array, params: SimulationParams): Float64A
   const { ux, uy } = wind;
 
   const next = new Float64Array(nx * ny);
+  const invDx = 1 / dx;
+  const invDy = 1 / dy;
+  const invDx2 = 1 / (dx * dx);
+  const invDy2 = 1 / (dy * dy);
 
-  for (let row = 1; row < ny - 1; row++) {
-    for (let col = 1; col < nx - 1; col++) {
-      const c  = C[idx(col,     row,     nx)];
-      const cE = C[idx(col + 1, row,     nx)]; // east
-      const cW = C[idx(col - 1, row,     nx)]; // west
-      const cN = C[idx(col,     row + 1, nx)]; // north
-      const cS = C[idx(col,     row - 1, nx)]; // south
+  // Compute flux-based conservative update for all cells
+  // For interior cells:
+  for (let row = 0; row < ny; row++) {
+    for (let col = 0; col < nx; col++) {
+      const c = C[idx(col, row, nx)];
 
-      // Upwind advection: use backward difference in wind direction
-      const dCdx = ux >= 0 ? (c - cW) / dx : (cE - c) / dx;
-      const dCdy = uy >= 0 ? (c - cS) / dy : (cN - c) / dy;
+      // Neighbor values with zero-diffusive-flux (Neumann) ghost treatment:
+      // At boundary, normal derivative is zero: C_ghost = C_boundary
+      const cE = col < nx - 1 ? C[idx(col + 1, row, nx)] : c;
+      const cW = col > 0      ? C[idx(col - 1, row, nx)] : c;
+      const cN = row < ny - 1 ? C[idx(col, row + 1, nx)] : c;
+      const cS = row > 0      ? C[idx(col, row - 1, nx)] : c;
 
-      // Central diffusion: Laplacian
-      const laplacian = (cE - 2 * c + cW) / (dx * dx)
-                       + (cN - 2 * c + cS) / (dy * dy);
+      // Upwind advection:
+      // If wind flows in from outside domain across boundary, concentration from outside is zero
+      const upwindW = col > 0 ? cW : 0;
+      const upwindE = col < nx - 1 ? cE : 0;
+      const upwindS = row > 0 ? cS : 0;
+      const upwindN = row < ny - 1 ? cN : 0;
+
+      const dCdx = ux >= 0 ? (c - upwindW) * invDx : (upwindE - c) * invDx;
+      const dCdy = uy >= 0 ? (c - upwindS) * invDy : (upwindN - c) * invDy;
+
+      // Conservative diffusion Laplacian with no-flux boundaries:
+      const laplacian = (cE - 2 * c + cW) * invDx2 + (cN - 2 * c + cS) * invDy2;
 
       next[idx(col, row, nx)] = c
-        - dt * (ux * dCdx + uy * dCdy)   // advection
-        + dt * diffusion * laplacian;     // diffusion
+        - dt * (ux * dCdx + uy * dCdy)
+        + dt * diffusion * laplacian;
     }
   }
 
-  // Apply source terms before boundary conditions
-  applySourceTerms(next, sources, dt, nx, ny);
+  // Inject emissions with area-consistent units (µg/s -> µg/m²)
+  applySourceTerms(next, sources, dt, nx, ny, dx, dy);
 
-  // Apply zero-gradient boundary conditions
-  applyZeroGradientBC(next, nx, ny);
-
-  // Safety: remove any NaN / negative values introduced by numerical artefacts
+  // Safety: remove any negative values or NaN artefacts
   sanitiseGrid(next);
 
   return next;
