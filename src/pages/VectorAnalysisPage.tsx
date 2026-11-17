@@ -28,6 +28,31 @@ export const VectorAnalysisPage: React.FC = () => {
   const inspectRow = state.selectedPoint?.row ?? Math.floor(ny / 2);
   const ptGrad = getGradientAt(gradientField, inspectCol, inspectRow, nx);
 
+  const fieldMax = Math.max(0.000001, ...Array.from(state.C));
+  const sampleCount = 24;
+  const cellW = 600 / sampleCount;
+  const cellH = 420 / sampleCount;
+  const fieldCells = Array.from({ length: sampleCount }, (_, r) =>
+    Array.from({ length: sampleCount }, (_, c) => {
+      const col = Math.min(nx - 1, Math.floor((c / sampleCount) * nx));
+      const row = Math.min(ny - 1, Math.floor((r / sampleCount) * ny));
+      const value = state.C[row * nx + col] ?? 0;
+      return { x: c * cellW, y: (sampleCount - 1 - r) * cellH, value };
+    })
+  ).flat();
+  const vectorSamples = Array.from({ length: 6 }, (_, r) =>
+    Array.from({ length: 8 }, (_, c) => {
+      const col = Math.min(nx - 1, Math.floor(((c + 0.5) / 8) * nx));
+      const row = Math.min(ny - 1, Math.floor(((r + 0.5) / 6) * ny));
+      const i = row * nx + col;
+      const gx = gradientField.gx[i] ?? 0;
+      const gy = gradientField.gy[i] ?? 0;
+      const magnitude = Math.hypot(gx, gy);
+      const scale = magnitude > 0 ? Math.min(13, 5 + magnitude * 2) / magnitude : 0;
+      return { x: ((c + 0.5) / 8) * 600, y: 420 - ((r + 0.5) / 6) * 420, dx: gx * scale, dy: -gy * scale };
+    })
+  ).flat();
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Module Title Banner */}
@@ -98,6 +123,29 @@ export const VectorAnalysisPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.6fr)_minmax(260px,.7fr)] gap-5">
+        <div className="bg-[#102326] rounded-xl border border-[#284341] p-4 sm:p-5 shadow-lg overflow-hidden">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div><span className="text-[9px] font-mono tracking-[.18em] text-[#80b9a7]">LIVE COMPUTATIONAL FIELD</span><h2 className="text-base font-bold text-[#f1f7f3] mt-1">Concentration & gradient vectors</h2><p className="text-[11px] text-[#a5bdb3] mt-1">Sampled directly from the current numerical concentration matrix</p></div>
+            <span className="px-2.5 py-1 rounded-full bg-[#1a3a37] border border-[#37645a] text-[10px] text-[#a8e4ce] font-mono">{nx} × {ny} GRID</span>
+          </div>
+          <div className="rounded-lg overflow-hidden border border-[#34514d] bg-[#0c191c]">
+            <svg viewBox="0 0 600 420" role="img" aria-label="Concentration heatmap with gradient direction arrows" className="w-full h-auto block">
+              <defs><marker id="breezelab-gradient-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 Z" fill="#e4fff4"/></marker></defs>
+              {fieldCells.map((cell, i) => { const ratio = Math.max(0, Math.min(1, cell.value / fieldMax)); const hue = 210 - ratio * 210; return <rect key={i} x={cell.x} y={cell.y} width={cellW + .5} height={cellH + .5} fill={`hsl(${hue} 76% ${28 + ratio * 30}%)`} opacity={0.35 + ratio * .65}/>; })}
+              {vectorSamples.map((v, i) => <line key={i} x1={v.x - v.dx * .5} y1={v.y - v.dy * .5} x2={v.x + v.dx} y2={v.y + v.dy} stroke="#e4fff4" strokeWidth="1.6" strokeLinecap="round" markerEnd="url(#breezelab-gradient-arrow)" opacity=".9"/>)}
+              {state.selectedPoint && <circle cx={((state.selectedPoint.col + .5) / nx) * 600} cy={420 - ((state.selectedPoint.row + .5) / ny) * 420} r="7" fill="none" stroke="#fff" strokeWidth="2"><animate attributeName="r" values="6;10;6" dur="2s" repeatCount="indefinite"/></circle>}
+            </svg>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3 text-[10px] text-[#b4c9c0]"><span className="flex items-center gap-2"><i className="w-3 h-2 rounded-sm bg-[#2679a8]"/> Lower concentration</span><span className="flex items-center gap-2"><i className="w-3 h-2 rounded-sm bg-[#d5a13f]"/> Elevated concentration</span><span className="flex items-center gap-2"><i className="w-3 h-2 rounded-sm bg-[#d94c43]"/> Higher concentration</span><span className="flex items-center gap-2"><i className="w-4 h-px bg-[#e4fff4]"/> Gradient direction</span></div>
+        </div>
+        <div className="grid grid-cols-2 xl:grid-cols-1 gap-3">
+          <div className="bg-white border border-[#D8E0DA] rounded-xl p-4"><span className="text-[9px] font-mono tracking-widest text-[#7a8b82]">FIELD MAGNITUDE</span><div className="text-2xl font-bold font-mono text-[#173d35] mt-2">{fieldMax.toFixed(3)}</div><p className="text-[10px] text-[#718078] mt-1">Maximum concentration · µg/m²</p><div className="h-1.5 rounded-full bg-[#e8efea] mt-4 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-[#2679a8] via-[#d5a13f] to-[#d94c43]" style={{ width: `${Math.min(100, (fieldMax / (fieldMax + 10)) * 100)}%` }}/></div></div>
+          <div className="bg-white border border-[#D8E0DA] rounded-xl p-4"><span className="text-[9px] font-mono tracking-widest text-[#7a8b82]">SELECTED GRID CELL</span><div className="text-2xl font-bold font-mono text-[#173d35] mt-2">{state.selectedPoint ? `(${state.selectedPoint.col}, ${state.selectedPoint.row})` : '—'}</div><p className="text-[10px] text-[#718078] mt-1">Select a point in the Simulation Lab to inspect it here</p></div>
+          <div className="col-span-2 xl:col-span-1 bg-[#e8f3ed] border border-[#cbded2] rounded-xl p-4"><span className="text-[9px] font-mono tracking-widest text-[#367466]">INTERPRETATION</span><p className="text-xs leading-relaxed text-[#31594e] mt-2">Gradient arrows indicate the direction of steepest local increase in concentration. Dense or rapidly changing regions identify the strongest spatial transitions in the simulated plume.</p></div>
+        </div>
+      </section>
 
       {/* Main Analysis Display Cards */}
       {activeTab === 'gradient' && (
