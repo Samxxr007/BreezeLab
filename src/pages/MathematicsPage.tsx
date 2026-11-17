@@ -1,10 +1,14 @@
 // BreezeLab – Mathematical Reference & Syllabus Alignment Page
 // Comprehensive educational theory, worked examples, symbols, and mathematical derivations.
 
-import React from 'react';
+import React, { useState } from 'react';
 import { BookOpen, Compass, Binary, RotateCcw, Sigma, ShieldAlert, Cpu } from 'lucide-react';
 
 export const MathematicsPage: React.FC = () => {
+  const [vectorAngle, setVectorAngle] = useState(35);
+  const [vectorSpeed, setVectorSpeed] = useState(4);
+  const ux = vectorSpeed * Math.cos((vectorAngle * Math.PI) / 180);
+  const uy = vectorSpeed * Math.sin((vectorAngle * Math.PI) / 180);
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
       {/* Page Header */}
@@ -63,8 +67,8 @@ export const MathematicsPage: React.FC = () => {
               <tr>
                 <td className="p-2.5 font-mono font-bold text-[#172521]">C(x,y,t)</td>
                 <td className="p-2.5">Concentration Field</td>
-                <td className="p-2.5 font-mono">model-units / cell</td>
-                <td className="p-2.5">Mass of dispersed pollutant per grid volume element</td>
+                <td className="p-2.5 font-mono">µg / m²</td>
+                <td className="p-2.5">Pollutant mass per unit horizontal area</td>
               </tr>
               <tr>
                 <td className="p-2.5 font-mono font-bold text-[#172521]">u = (ux, uy)</td>
@@ -81,7 +85,7 @@ export const MathematicsPage: React.FC = () => {
               <tr>
                 <td className="p-2.5 font-mono font-bold text-[#172521]">S(x,y,t)</td>
                 <td className="p-2.5">Source Emission Rate</td>
-                <td className="p-2.5 font-mono">model-units / s</td>
+                <td className="p-2.5 font-mono">µg / s</td>
                 <td className="p-2.5">Continuous point emission injections (e.g. factory stacks)</td>
               </tr>
             </tbody>
@@ -123,6 +127,38 @@ export const MathematicsPage: React.FC = () => {
           <p className="text-[11px] text-[#92400E] leading-relaxed">
             Unlike decoupled checks, this combined condition guarantees that simultaneous advection and diffusion do not destabilize the numerical stencil. BreezeLab enforces this limit by auto-substepping the time-step if violated.
           </p>
+        </div>
+      </section>
+
+      <section className="bg-[#102326] rounded-xl border border-[#284341] p-6 text-[#eff8f3] space-y-5 overflow-hidden">
+        <div className="flex flex-wrap justify-between items-start gap-3">
+          <div><span className="text-[9px] font-mono tracking-[.2em] text-[#80b9a7]">INTERACTIVE CONCEPT EXPLORER</span><h2 className="text-lg font-bold mt-1">Resolve a wind vector into components</h2><p className="text-xs text-[#a5bdb3] mt-1">Change the magnitude and angle to see the Cartesian components update.</p></div>
+          <span className="text-[10px] font-mono px-2.5 py-1 rounded-full border border-[#37645a] bg-[#1a3a37] text-[#a8e4ce]">u = (uₓ, uᵧ)</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-[1.2fr_.8fr] gap-6 items-center">
+          <div className="rounded-lg border border-[#34514d] bg-[#0b191b] p-3">
+            <svg viewBox="0 0 420 270" className="w-full h-auto" role="img" aria-label="Wind vector resolved into horizontal and vertical components">
+              <defs><marker id="math-vector-tip" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7Z" fill="#7ce0bd"/></marker></defs>
+              <path d="M35 220 H390 M70 245 V20" stroke="#56716a" strokeWidth="1.2"/>
+              <path d="M70 220 H350" stroke="#56716a" strokeDasharray="4 5"/><path d="M70 220 V42" stroke="#56716a" strokeDasharray="4 5"/>
+              <path d={`M70 220 L${70 + ux * 34} 220 L${70 + ux * 34} ${220 - uy * 34}`} fill="none" stroke="#e6b65d" strokeWidth="2.5" strokeDasharray="5 5"/>
+              <line x1="70" y1="220" x2={70 + ux * 34} y2={220 - uy * 34} stroke="#7ce0bd" strokeWidth="4" strokeLinecap="round" markerEnd="url(#math-vector-tip)"/>
+              <path d={`M112 220 A42 42 0 0 0 ${112} ${220 - 42 * Math.sin(vectorAngle * Math.PI / 180)}`} fill="none" stroke="#e6b65d" strokeWidth="2" opacity=".9"/>
+              <text x="355" y="240" fill="#9eb8ad" fontSize="11">+x (east)</text><text x="80" y="28" fill="#9eb8ad" fontSize="11">+y (north)</text>
+              <text x={Math.min(360, 85 + ux * 17)} y="237" fill="#e6b65d" fontSize="11">uₓ = {ux.toFixed(2)}</text>
+              <text x={85 + ux * 34 + 8} y={Math.max(24, 220 - uy * 17)} fill="#e6b65d" fontSize="11">uᵧ = {uy.toFixed(2)}</text>
+              <text x={Math.min(330, 80 + ux * 34)} y={Math.max(20, 205 - uy * 34)} fill="#7ce0bd" fontSize="12" fontWeight="bold">|u| = {vectorSpeed.toFixed(1)}</text>
+            </svg>
+          </div>
+          <div className="space-y-5">
+            <div><div className="flex justify-between text-xs mb-2"><label htmlFor="math-vector-speed" className="text-[#b8cec4]">Wind magnitude</label><span className="font-mono text-[#7ce0bd]">{vectorSpeed.toFixed(1)} m/s</span></div><input id="math-vector-speed" type="range" min="0" max="8" step=".1" value={vectorSpeed} onChange={e=>setVectorSpeed(Number(e.target.value))} className="w-full accent-[#42ad91]"/></div>
+            <div><div className="flex justify-between text-xs mb-2"><label htmlFor="math-vector-angle" className="text-[#b8cec4]">Angle from +x axis</label><span className="font-mono text-[#7ce0bd]">{vectorAngle}°</span></div><input id="math-vector-angle" type="range" min="0" max="360" step="1" value={vectorAngle} onChange={e=>setVectorAngle(Number(e.target.value))} className="w-full accent-[#42ad91]"/></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-[#1a3a37] border border-[#37645a] p-3"><span className="text-[9px] tracking-widest text-[#9bb9ac]">HORIZONTAL</span><div className="text-xl font-mono font-bold text-[#f0c875] mt-1">{ux.toFixed(3)}</div><span className="text-[10px] text-[#9bb9ac]">uₓ = |u| cos θ</span></div>
+              <div className="rounded-lg bg-[#1a3a37] border border-[#37645a] p-3"><span className="text-[9px] tracking-widest text-[#9bb9ac]">VERTICAL</span><div className="text-xl font-mono font-bold text-[#f0c875] mt-1">{uy.toFixed(3)}</div><span className="text-[10px] text-[#9bb9ac]">uᵧ = |u| sin θ</span></div>
+            </div>
+            <p className="text-[10px] leading-relaxed text-[#a5bdb3]">The component values determine the directional advection terms uₓ ∂C/∂x and uᵧ ∂C/∂y in the governing PDE.</p>
+          </div>
         </div>
       </section>
 
