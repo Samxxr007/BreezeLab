@@ -21,6 +21,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 }) => {
   const { state, setSelectedPoint, addSource } = useSimulation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const particleCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Visualization toggles
@@ -57,6 +58,10 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           // Set internal canvas resolution
           canvasRef.current.width = Math.floor(width);
           canvasRef.current.height = Math.floor(height);
+          if (particleCanvasRef.current) {
+            particleCanvasRef.current.width = Math.floor(width);
+            particleCanvasRef.current.height = Math.floor(height);
+          }
           draw();
         }
       }
@@ -69,6 +74,68 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   useEffect(() => {
     draw();
   }, [draw]);
+
+  // Lightweight animated wind-carried tracer particles. These are a visual aid,
+  // not solver particles or additional concentration values.
+  useEffect(() => {
+    const canvas = particleCanvasRef.current;
+    const host = containerRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !host || !ctx) return;
+
+    type Tracer = { x: number; y: number; age: number; life: number; drift: number };
+    const tracers: Tracer[] = [];
+    const { nx, ny } = state.params.grid;
+    const sources = state.params.sources.length
+      ? state.params.sources
+      : [{ id: 'ambient', x: nx * 0.18, y: ny * 0.5, rate: 1, label: 'Ambient' }];
+    const wind = state.params.wind;
+    const magnitude = Math.hypot(wind.ux, wind.uy) || 1;
+    const vx = (wind.ux / magnitude) * (0.35 + wind.speed * 0.12);
+    const vy = -(wind.uy / magnitude) * (0.35 + wind.speed * 0.12);
+    const spawn = (): Tracer => {
+      const source = sources[Math.floor(Math.random() * sources.length)];
+      const w = canvas.width || host.clientWidth;
+      const h = canvas.height || host.clientHeight;
+      return {
+        x: (source.x / Math.max(1, nx - 1)) * w + (Math.random() - .5) * 8,
+        y: h - (source.y / Math.max(1, ny - 1)) * h + (Math.random() - .5) * 8,
+        age: 0,
+        life: 100 + Math.random() * 180,
+        drift: .65 + Math.random() * .8,
+      };
+    };
+    for (let i = 0; i < 90; i++) tracers.push(spawn());
+
+    let frame = 0;
+    let raf = 0;
+    const animate = () => {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      tracers.forEach((p, i) => {
+        p.x += vx * p.drift;
+        p.y += vy * p.drift;
+        p.age += 1;
+        if (p.age > p.life || p.x < -8 || p.x > w + 8 || p.y < -8 || p.y > h + 8) {
+          tracers[i] = spawn();
+          return;
+        }
+        const fade = Math.min(1, p.age / 18, (p.life - p.age) / 24);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.1 + fade * 1.1, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(155, 238, 211, ${Math.max(0, fade) * .62})`;
+        ctx.shadowColor = 'rgba(94, 221, 184, .55)';
+        ctx.shadowBlur = 7;
+        ctx.fill();
+      });
+      ctx.shadowBlur = 0;
+      frame += 1;
+      raf = requestAnimationFrame(animate);
+    };
+    raf = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(raf);
+  }, [state.params.grid.nx, state.params.grid.ny, state.params.wind.ux, state.params.wind.uy, state.params.wind.speed, state.params.sources]);
 
   // Canvas Click Handler
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -161,6 +228,11 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ref={canvasRef}
           onClick={handleCanvasClick}
           className="w-full h-full block"
+        />
+        <canvas
+          ref={particleCanvasRef}
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full pointer-events-none"
         />
 
         {/* Vertical Color Scale Legend */}
